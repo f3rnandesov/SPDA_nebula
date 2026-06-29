@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Painel técnico para cadastro, inspeção e rastreabilidade de pontos SPDA com QR Codes.">
+  <meta name="theme-color" content="#0b1020">
+  <meta name="color-scheme" content="dark light">
+  <title>Nebula SPDA | Painel Técnico</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <strong>Nebula SPDA</strong>
+      <span>Rastreabilidade industrial por QR Code</span>
+    </div>
+    <nav aria-label="Navegação principal">
+      <button class="tab active" data-view="dashboard">Indicadores</button>
+      <button class="tab" data-view="pontos">Pontos</button>
+      <button class="tab" data-view="inspecoes">Inspeções</button>
+      <button class="tab" data-view="naoconformidades">Não Conformidades</button>
+      <button class="tab" data-view="qrcodes">QR Codes</button>
+      <button class="tab" data-view="config">Configurações</button>
+    </nav>
+    <div class="userbar">
+      <span id="authUser">Visitante</span>
+      <button id="logoutBtn" class="secondary">Sair</button>
+    </div>
+  </header>
+
+  <section id="loginScreen" class="login-screen">
+    <div class="login-shell">
+      <div class="login-copy panel">
+        <div class="login-badge">Nebula SPDA</div>
+        <h1>Manage. Inspect. Trust the data.</h1>
+        <p>Uma experiência limpa e fluida para cadastro de pontos, inspeções, QR Codes e rastreabilidade técnica em um painel único.</p>
+        <div class="login-points">
+          <div class="login-point">
+            <strong>QR Code</strong>
+            <span>Consulta instantânea em campo</span>
+          </div>
+          <div class="login-point">
+            <strong>Workflow</strong>
+            <span>Fluxo compacto e sem ruído</span>
+          </div>
+          <div class="login-point">
+            <strong>Motion UI</strong>
+            <span>Movimento sutil e elegante</span>
+          </div>
+        </div>
+        <div class="login-art" aria-hidden="true">
+          <div class="login-orb login-orb-a"></div>
+          <div class="login-orb login-orb-b"></div>
+          <div class="login-card-sample">
+            <span class="hero-frame-label">Live overview</span>
+            <strong>Inspection control</strong>
+            <p>Rastreabilidade visual em uma interface slim e uniforme.</p>
+          </div>
+        </div>
+      </div>
+      <form id="loginForm" class="panel form login-card">
+        <div class="login-badge">Secure access</div>
+        <h1>Acesso ao sistema</h1>
+        <p class="muted">Entre com um responsável cadastrado para registrar operações e validar inspeções.</p>
+        <label>Usuário<select id="loginUser"></select></label>
+        <label>Senha<input id="loginPassword" type="password" placeholder="1234" required></label>
+        <button type="submit">Entrar</button>
+      </form>
+    </div>
+  </section>
+
+  <main>
+    <section id="dashboard" class="view active">
+      <div class="hero panel">
+        <div class="hero-copy">
+          <span class="eyebrow">Nebula SPDA</span>
+          <h1>WELCOME</h1>
+          <p>Centro de comando para cadastro, inspeção e rastreabilidade de ativos SPDA com QR Code, tendências e alertas críticos.</p>
+          <div class="hero-tags" aria-label="Atalhos visuais">
+            <span>Discover</span>
+            <span>Dashboard</span>
+            <span>Trends</span>
+            <span>QR Codes</span>
+            <span>Inspection</span>
+          </div>
+          <div class="actions hero-actions">
+            <button id="reportPdf" class="secondary">Relatório PDF</button>
+            <button id="seedReset" class="secondary">Restaurar base exemplo</button>
+          </div>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <div class="orb orb-one"></div>
+          <div class="orb orb-two"></div>
+          <div class="orb orb-three"></div>
+          <div class="hero-frame">
+            <span class="hero-frame-label">Operational overview</span>
+            <strong>Painel técnico</strong>
+            <p>Conformidade em tempo real, inspeções consolidadas e rastreabilidade visual.</p>
+          </div>
+        </div>
+      </div>
+      <div id="cards" class="cards"></div>
+      <div class="grid two">
+        <article class="panel">
+          <h2>Pontos por área</h2>
+          <p class="muted chart-caption">Distribuição dos pontos cadastrados entre as áreas operacionais.</p>
+          <canvas id="areaChart" height="220"></canvas>
+        </article>
+        <article class="panel">
+          <h2>Conformidade</h2>
+          <p class="muted chart-caption">Distribuição do status mais recente com leitura percentual e visão de risco.</p>
+          <canvas id="statusChart" height="220"></canvas>
+        </article>
+      </div>
+      <article class="panel">
+        <h2>Evolução da resistência</h2>
+        <p class="muted chart-caption">Acompanhe a tendência e compare com o limite configurado.</p>
+        <div class="row gap">
+          <select id="trendPoint"></select>
+          <span id="trendHint" class="muted"></span>
+        </div>
+        <canvas id="trendChart" height="260"></canvas>
+      </article>
+      <article class="panel">
+        <h2>Alertas e não conformidades</h2>
+        <div id="alerts"></div>
+      </article>
+    </section>
+
+    <section id="pontos" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Cadastro de pontos</h1>
+          <p>Código único, localização, criticidade, ficha digital e histórico.</p>
+        </div>
+        <button id="newPoint">Novo ponto</button>
+      </div>
+      <div class="layout">
+        <form id="pointForm" class="panel form">
+          <input type="hidden" id="pointId">
+          <label>Cliente<select id="pointClient" required></select></label>
+          <label>Unidade<select id="pointUnit" required></select></label>
+          <label>Área<select id="pointArea" required></select></label>
+          <label>Tipo de ponto<select id="pointType" required></select></label>
+          <label>Número sequencial<input id="pointNumber" type="number" min="1" required></label>
+          <label>Código gerado<input id="pointCode" readonly></label>
+          <label>Localização<input id="pointLocation" required placeholder="Ex.: Próximo ao Tanque 09"></label>
+          <div class="grid mini-grid">
+            <label>Latitude<input id="pointLat" type="number" step="0.000001" placeholder="-23.550520"></label>
+            <label>Longitude<input id="pointLng" type="number" step="0.000001" placeholder="-46.633308"></label>
+          </div>
+          <label>Descrição<textarea id="pointDescription" rows="3"></textarea></label>
+          <label>Criticidade<select id="pointCriticality"><option value="Alta">Alta</option><option value="Media">Média</option><option value="Baixa">Baixa</option></select></label>
+          <label>Status<select id="pointStatus"><option value="Ativo">Ativo</option><option value="Em manutencao">Em manutenção</option><option value="Inativo">Inativo</option></select></label>
+          <label>Foto de referência (URL)<input id="pointPhoto" placeholder="https://..."></label>
+          <label>Upload da foto do ponto<input id="pointPhotoFile" type="file" accept="image/*"></label>
+          <div id="pointPhotoPreview" class="photo-preview"></div>
+          <label>Observações<textarea id="pointNotes" rows="3"></textarea></label>
+          <div class="actions">
+            <button type="submit">Salvar ponto</button>
+            <button type="button" id="deletePoint" class="danger">Excluir</button>
+          </div>
+        </form>
+        <div class="panel">
+          <div class="filters">
+            <input id="pointSearch" placeholder="Buscar por código, área ou tipo">
+            <select id="areaFilter"><option value="">Todas as áreas</option></select>
+            <select id="typeFilter"><option value="">Todos os tipos</option></select>
+            <select id="pointStatusFilter"><option value="">Todos os status</option></select>
+          </div>
+          <div id="pointList" class="table-container"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="inspecoes" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Registro de inspeções</h1>
+          <p>Medições, condição visual, conformidade e observações técnicas.</p>
+        </div>
+      </div>
+      <div class="layout">
+        <form id="inspectionForm" class="panel form">
+          <input type="hidden" id="inspectionId">
+          <label>Código do ponto<select id="inspectionPoint" required></select></label>
+          <label>Data da inspeção<input id="inspectionDate" type="date" required></label>
+          <label>Responsável<select id="inspectionUser" required></select></label>
+          <label>Condição visual<select id="inspectionVisual"><option value="Boa">Boa</option><option value="Regular">Regular</option><option value="Ruim">Ruim</option><option value="Critica">Crítica</option></select></label>
+          <label>Continuidade elétrica (miliohms)<input id="inspectionContinuity" type="number" step="0.1" min="0"></label>
+          <label>Resistência de aterramento (ohms)<input id="inspectionResistance" type="number" step="0.1" min="0"></label>
+          <label>Presença de oxidação<select id="inspectionOxidation"><option value="Nao">Não</option><option value="Sim">Sim</option></select></label>
+          <label>Necessidade de correção<select id="inspectionCorrection"><option value="Nao">Não</option><option value="Sim">Sim</option></select></label>
+          <label>Situação<select id="inspectionConformity"><option value="Conforme">Conforme</option><option value="Nao conforme">Não conforme</option><option value="Monitorar">Monitorar</option></select></label>
+          <label>Foto da inspeção (URL)<input id="inspectionPhoto" placeholder="https://..."></label>
+          <label>Upload da foto da inspeção<input id="inspectionPhotoFile" type="file" accept="image/*"></label>
+          <div id="inspectionPhotoPreview" class="photo-preview"></div>
+          <label>Observações técnicas<textarea id="inspectionNotes" rows="3"></textarea></label>
+          <div class="actions">
+            <button type="submit">Salvar inspeção</button>
+            <button type="button" id="clearInspection" class="secondary">Limpar</button>
+          </div>
+        </form>
+        <div class="panel">
+          <div class="filters">
+            <input id="inspectionSearch" placeholder="Buscar no histórico">
+            <select id="inspectionFilterPoint"><option value="">Todos os pontos</option></select>
+            <select id="inspectionFilterStatus"><option value="">Todos os status</option></select>
+          </div>
+          <div id="inspectionList" class="table-container"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="naoconformidades" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Não conformidades</h1>
+          <p>Pontos com falhas, medições fora de faixa ou necessidade de correção.</p>
+        </div>
+        <button id="ncReportPdf" class="secondary">Relatório PDF</button>
+      </div>
+      <div class="grid two">
+        <article class="panel">
+          <h2>Resumo crítico</h2>
+          <div id="ncCards" class="cards compact-cards"></div>
+        </article>
+        <article class="panel">
+          <h2>Faixas de alerta</h2>
+          <div class="thresholds">
+            <label>Resistência máxima (ohms)<input id="limitResistance" type="number" step="0.1" min="0"></label>
+            <label>Continuidade máxima (miliohms)<input id="limitContinuity" type="number" step="0.1" min="0"></label>
+            <button id="saveLimits">Salvar limites</button>
+          </div>
+        </article>
+      </div>
+      <article class="panel">
+        <div class="filters">
+          <input id="ncSearch" placeholder="Buscar ponto, área, responsável ou observação">
+          <select id="ncAreaFilter"><option value="">Todas as áreas</option></select>
+          <select id="ncTypeFilter"><option value="">Todos os tipos</option></select>
+        </div>
+        <div id="ncList" class="table-container"></div>
+      </article>
+    </section>
+
+    <section id="qrcodes" class="view">
+      <div class="section-head">
+        <div>
+          <h1>QR Codes</h1>
+          <p>Etiquetas vinculadas aos pontos cadastrados para consulta em campo.</p>
+        </div>
+        <div class="actions head-actions">
+          <button id="downloadAllQr" class="secondary">Baixar QR Codes</button>
+          <button id="printQr" class="secondary">Imprimir etiquetas</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="filters">
+          <input id="qrBase" placeholder="URL base para celular. Ex.: http://192.168.0.10:8000">
+          <button id="applyQrBase">Atualizar QR Codes</button>
+          <button id="startScan" class="secondary">Ler QR pela câmera</button>
+          <button id="stopScan" class="danger">Parar câmera</button>
+        </div>
+        <p id="qrHelp" class="muted"></p>
+        <div id="scanBox" class="scanner">
+          <video id="scanVideo" playsinline muted></video>
+          <p id="scanStatus" class="muted">Leitor disponível em navegadores com BarcodeDetector.</p>
+        </div>
+        <div id="qrGrid" class="qr-grid"></div>
+      </div>
+    </section>
+
+    <section id="config" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Configurações do sistema</h1>
+          <p>Personalização de clientes, plantas, áreas, tipos de pontos e responsáveis.</p>
+        </div>
+        <button id="exportData" class="secondary">Exportar JSON</button>
+      </div>
+      <div class="grid two">
+        <form id="clientForm" class="panel form compact">
+          <h2>Clientes</h2>
+          <input type="hidden" id="clientId">
+          <label>Cliente<input id="clientName" required></label>
+          <label>Sigla<input id="clientSigla" maxlength="8" required></label>
+          <div class="actions"><button>Salvar cliente</button></div>
+          <div id="clientList" class="mini-list"></div>
+        </form>
+        <form id="unitForm" class="panel form compact">
+          <h2>Unidades</h2>
+          <input type="hidden" id="unitId">
+          <label>Cliente<select id="unitClient" required></select></label>
+          <label>Unidade<input id="unitName" required></label>
+          <label>Sigla<input id="unitSigla" maxlength="8" required></label>
+          <div class="actions"><button>Salvar unidade</button></div>
+          <div id="unitList" class="mini-list"></div>
+        </form>
+        <form id="areaForm" class="panel form compact">
+          <h2>Áreas</h2>
+          <input type="hidden" id="areaId">
+          <label>Área<input id="areaName" required></label>
+          <label>Sigla<input id="areaSigla" maxlength="8" required></label>
+          <div class="actions"><button>Salvar área</button></div>
+          <div id="configAreaList" class="mini-list"></div>
+        </form>
+        <form id="typeForm" class="panel form compact">
+          <h2>Tipos de pontos</h2>
+          <input type="hidden" id="typeId">
+          <label>Tipo<input id="typeName" required></label>
+          <label>Sigla<input id="typeSigla" maxlength="10" required></label>
+          <label>Descrição<textarea id="typeDescription" rows="2"></textarea></label>
+          <div class="actions"><button>Salvar tipo</button></div>
+          <div id="configTypeList" class="mini-list"></div>
+        </form>
+        <form id="userForm" class="panel form compact">
+          <h2>Responsáveis</h2>
+          <input type="hidden" id="userId">
+          <label>Nome<input id="userName" required></label>
+          <label>Função<input id="userRole" required></label>
+          <label>Senha<input id="userPassword" type="password" placeholder="1234"></label>
+          <div class="actions"><button>Salvar responsável</button></div>
+          <div id="userList" class="mini-list"></div>
+        </form>
+        <div class="panel">
+          <h2>Dados</h2>
+          <p class="muted">Os dados ficam salvos no navegador. A exportação gera um arquivo JSON para backup ou apresentação.</p>
+          <label class="import">Importar JSON<input id="importData" type="file" accept="application/json"></label>
+          <button id="clearData" class="danger">Apagar tudo</button>
+        </div>
+        <div class="panel">
+          <h2>Histórico de alterações</h2>
+          <div id="auditList" class="mini-list audit-list"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="pointDialog">
+    <button class="icon-close" id="closeDialog" aria-label="Fechar">x</button>
+    <div id="pointSheet"></div>
+  </dialog>
+
+  <script src="app.js?v=5"></script>
+</body>
+</html>
