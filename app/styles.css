@@ -171,6 +171,7 @@ a:hover {
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(18px);
   box-shadow: var(--shadow-lg);
+  min-width: 0;
 }
 
 .topbar > div:first-child,
@@ -184,6 +185,11 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+}
+
+.nav-scroll,
+.userbar {
   min-width: 0;
 }
 
@@ -895,6 +901,7 @@ textarea {
 
 dialog {
   width: min(900px, calc(100% - 20px));
+  max-width: 100%;
   border: 1px solid var(--line);
   border-radius: 26px;
   padding: 20px;
@@ -1177,87 +1184,23 @@ table tbody tr:hover {
   align-items: stretch;
 }
 
+/* Procure onde está essa linha no seu CSS e adicione o align-content */
 .login-copy,
 .login-card {
   min-height: 640px;
+  display: grid;           /* Garante que ambos usem o sistema de grid */
+  align-content: center;   /* Centraliza o conteúdo verticalmente em ambos os cards */
+  padding: clamp(24px, 4vw, 48px); /* Aplica o mesmo espaçamento interno nas duas caixas */
 }
 
-.login-copy {
-  display: grid;
-  gap: 18px;
-  align-content: center;
-  padding: clamp(24px, 4vw, 48px);
-  background:
-    radial-gradient(circle at 20% 22%, rgba(124, 58, 237, 0.1), transparent 18%),
-    radial-gradient(circle at 82% 18%, rgba(109, 40, 217, 0.08), transparent 20%),
-    radial-gradient(circle at 72% 78%, rgba(139, 92, 246, 0.08), transparent 18%),
-    linear-gradient(145deg, #ffffff, #f8f6ff);
-}
-
-.login-copy h1 {
-  max-width: 12ch;
-  font-size: clamp(2.6rem, 4.4vw, 4.9rem);
-}
-
-.login-copy p {
-  max-width: 48ch;
-  color: var(--muted);
-  line-height: 1.7;
-}
-
-.login-points {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.login-point {
-  padding: 14px;
-  border-radius: 18px;
-  background: #ffffff;
-  border: 1px solid var(--line);
-}
-
-.login-point strong {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--brand);
-  font-size: 0.95rem;
-}
-
-.login-point span {
-  color: var(--muted);
-  font-size: 0.86rem;
-  line-height: 1.45;
-}
-
-.login-art {
-  position: relative;
-  min-height: 280px;
-  border-radius: 28px;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 16% 18%, rgba(124, 58, 237, 0.12), transparent 24%),
-    radial-gradient(circle at 76% 82%, rgba(109, 40, 217, 0.1), transparent 20%),
-    linear-gradient(160deg, #f8f6ff, #ede9fe);
-  border: 1px solid var(--line);
-}
-
-.login-orb {
-  position: absolute;
-  border-radius: 999px;
-  filter: blur(2px);
-  animation: drift 12s ease-in-out infinite;
-}
-
+/* Modifique levemente a orbe para ela descer junto com o fluxo do texto */
 .login-orb-a {
   width: 180px;
   height: 180px;
   left: -22px;
-  top: 8px;
+  top: -40px; /* Um ajuste fino negativo caso precise subir ou afastar um pouco do h1 */
   background: radial-gradient(circle, rgba(124, 58, 237, 0.45), rgba(124, 58, 237, 0.06) 70%, transparent 72%);
 }
-
 .login-orb-b {
   width: 160px;
   height: 160px;
@@ -1609,6 +1552,21 @@ canvas {
 }
 
 @media (max-width: 1180px) {
+  .topbar {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    padding: 16px 14px;
+  }
+
+  .topbar > div:first-child,
+  .brand {
+    min-width: 0;
+  }
+
+  .section-head {
+    align-items: stretch;
+  }
+
   .hero {
     grid-template-columns: 1fr;
   }
@@ -1620,6 +1578,7 @@ canvas {
   .login-copy,
   .login-card {
     min-height: 0;
+    width: 100%;
   }
 
   .layout {
@@ -1644,6 +1603,16 @@ canvas {
   .section-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .topbar {
+    gap: 12px;
+  }
+
+  .brand,
+  .userbar {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .nav-scroll::before,
@@ -1769,13 +1738,64 @@ canvas {
     right: 16px;
     width: auto;
   }
+
+  .responsive-table tr {
+    padding: 16px;
+  }
+
+  .responsive-table td {
+    grid-template-columns: minmax(90px, 40%) 1fr;
+  }
+
+  .responsive-table td::before {
+    font-size: 0.7rem;
+  }
 }
 
 @media (max-width: 560px) {
   main {
-    width: min(100% - 12px, 1380px);
+    width: min(100% - 16px, 1380px);
     margin-top: 14px;
   }
+
+  .topbar {
+    width: calc(100% - 18px);
+    margin-top: 10px;
+    padding: 16px 14px;
+  }
+
+  .hero,
+  .login-copy,
+  .login-card {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .login-points {
+    grid-template-columns: 1fr;
+  }
+
+  .panel,
+  .card,
+  .qr-card,
+  dialog {
+    border-radius: 20px;
+  }
+
+  .section-head {
+    gap: 14px;
+  }
+
+  .hero-copy p,
+  .section-head p,
+  .login-copy p {
+    max-width: 100%;
+  }
+
+  .nav-scroll {
+    width: 100%;
+  }
+}
 
   .topbar {
     width: calc(100% - 10px);
