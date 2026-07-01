@@ -1,11 +1,67 @@
 const KEY = "smartlab_spda_v1";
 const AUTH_KEY = "smartlab_spda_auth";
+const CHART_FONT = "'Inter', 'Segoe UI', sans-serif";
 const today = () => new Date().toISOString().slice(0, 10);
 const uid = () => Math.random().toString(36).slice(2, 10);
 const byId = id => document.getElementById(id);
 const money = value => Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 const clone = value => JSON.parse(JSON.stringify(value));
 const memoryStorage = new Map();
+
+const emptyIcons = {
+  inbox: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v14H4z"/><path d="M4 9h16M9 13h6"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 6L9 17l-5-5"/></svg>`,
+  alert: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 9v4M12 17h.01"/><path d="M10.3 4.3h3.4L21 19H3L10.3 4.3z"/></svg>`,
+  search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`
+};
+
+function emptyState({ icon = "inbox", title, message, actionLabel = "", actionId = "", variant = "" } = {}) {
+  const action = actionLabel
+    ? `<button type="button" class="secondary"${actionId ? ` id="${actionId}"` : ""}>${actionLabel}</button>`
+    : "";
+  return `<div class="empty-state${variant ? ` ${variant}` : ""}">
+    <div class="empty-state-icon">${emptyIcons[icon] || emptyIcons.inbox}</div>
+    <strong>${title}</strong>
+    <p class="muted">${message}</p>
+    ${action}
+  </div>`;
+}
+
+function tableCell(label, content, className = "") {
+  const cls = className ? ` class="${className}"` : "";
+  return `<td data-label="${label}"${cls}>${content}</td>`;
+}
+
+function toast(message, type = "success", duration = 4200) {
+  const container = byId("toastContainer");
+  if (!container) return;
+  const icons = {
+    success: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>`,
+    error: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>`,
+    info: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/></svg>`,
+    warn: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 4.3h3.4L21 19H3L10.3 4.3z"/></svg>`
+  };
+  const el = document.createElement("div");
+  el.className = `toast toast-${type}`;
+  el.setAttribute("role", "status");
+  el.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><span>${message}</span>`;
+  container.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 280);
+  }, duration);
+}
+
+function navigateToView(viewId) {
+  const tab = document.querySelector(`.tab[data-view="${viewId}"]`);
+  if (!tab) return;
+  document.querySelectorAll(".tab,.view").forEach(el => el.classList.remove("active"));
+  tab.classList.add("active");
+  byId(viewId)?.classList.add("active");
+  if (viewId === "dashboard") renderDashboard();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
 
 function createStorage() {
   try {
@@ -289,7 +345,16 @@ function renderPoints() {
   });
 
   if (!points.length) {
-    byId("pointList").innerHTML = `<p class="muted" style="padding: 20px; text-align: center;">Nenhum ponto cadastrado ou correspondente aos filtros.</p>`;
+    const hasFilters = search || areaFilter || typeFilter || statusFilter;
+    byId("pointList").innerHTML = emptyState({
+      icon: hasFilters ? "search" : "inbox",
+      title: hasFilters ? "Nenhum ponto encontrado" : "Nenhum ponto cadastrado",
+      message: hasFilters
+        ? "Ajuste os filtros ou a busca para localizar o ponto desejado."
+        : "Cadastre o primeiro ponto SPDA para iniciar a rastreabilidade e gerar QR Codes.",
+      actionLabel: hasFilters ? "" : "Cadastrar ponto",
+      actionId: hasFilters ? "" : "emptyNewPoint"
+    });
     return;
   }
 
@@ -303,7 +368,7 @@ function renderPoints() {
           <th>Localização</th>
           <th>Última Inspeção</th>
           <th>Status</th>
-          <th style="width: 200px; text-align: center;">Ações</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -311,7 +376,8 @@ function renderPoints() {
           const area = findIn("areas", point.areaId);
           const type = findIn("types", point.typeId);
           const last = latestInspection(point.id);
-          const location = point.lat && point.lng ? `${point.location} <small class="muted" style="display:block;">(${point.lat}, ${point.lng})</small>` : point.location;
+          const coords = point.lat && point.lng ? `<small class="muted coords">${point.lat}, ${point.lng}</small>` : "";
+          const location = `${point.location}${coords ? `<span class="coords-wrap">${coords}</span>` : ""}`;
           
           let statusBadge = `<span class="badge muted">Sem Inspeção</span>`;
           if (last) {
@@ -325,26 +391,22 @@ function renderPoints() {
           if (point.status === "Em manutencao") pointStatusBadge = `<span class="badge warn">Em manutenção</span>`;
           else if (point.status === "Inativo") pointStatusBadge = `<span class="badge muted">Inativo</span>`;
 
-          return `
-            <tr>
-              <td><strong>${point.code}</strong></td>
-              <td>${area.name}</td>
-              <td>${type.name}</td>
-              <td>${location}</td>
-              <td>${last ? new Date(last.date).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "—"}</td>
-              <td>
-                <div style="display:flex; flex-direction:column; gap:4px;">
-                  ${pointStatusBadge}
-                  ${statusBadge}
-                </div>
-              </td>
-              <td style="text-align: center;">
-                <div class="actions-cell" style="justify-content: center;">
+          const statusHtml = `<div class="status-stack">${pointStatusBadge}${statusBadge}</div>`;
+          const actionsHtml = `<div class="actions-cell">
                   <button data-edit-point="${point.id}" class="secondary">Editar</button>
                   <button data-sheet-point="${point.id}">Ficha</button>
                   ${point.lat && point.lng ? `<a class="button-link" target="_blank" rel="noopener" href="${mapUrl(point)}">Mapa</a>` : ""}
-                </div>
-              </td>
+                </div>`;
+
+          return `
+            <tr>
+              ${tableCell("Código", `<strong>${point.code}</strong>`)}
+              ${tableCell("Planta / Área", area.name)}
+              ${tableCell("Tipo", type.name)}
+              ${tableCell("Localização", location)}
+              ${tableCell("Última Inspeção", last ? new Date(last.date).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "—")}
+              ${tableCell("Status", statusHtml)}
+              ${tableCell("Ações", actionsHtml, "cell-actions")}
             </tr>
           `;
         }).join("")}
@@ -368,7 +430,14 @@ function renderInspections() {
   });
 
   if (!rows.length) {
-    byId("inspectionList").innerHTML = `<p class="muted" style="padding: 20px; text-align: center;">Nenhuma inspeção encontrada.</p>`;
+    const hasFilters = search || filterPoint || filterStatus;
+    byId("inspectionList").innerHTML = emptyState({
+      icon: hasFilters ? "search" : "inbox",
+      title: hasFilters ? "Nenhuma inspeção encontrada" : "Nenhuma inspeção registrada",
+      message: hasFilters
+        ? "Revise os filtros ou o termo de busca para encontrar registros no histórico."
+        : "Registre a primeira inspeção para acompanhar medições e conformidade dos pontos."
+    });
     return;
   }
 
@@ -384,7 +453,7 @@ function renderInspections() {
           <th>Continuidade</th>
           <th>Situação</th>
           <th>Observações</th>
-          <th style="text-align: center; width: 80px;">Foto</th>
+          <th>Foto</th>
         </tr>
       </thead>
       <tbody>
@@ -395,20 +464,23 @@ function renderInspections() {
           const outOfRange = isOutOfRange(item);
           const badgeClass = item.conformity === "Conforme" && !outOfRange ? "ok" : (item.conformity === "Nao conforme" || outOfRange ? "bad" : "warn");
           const extraText = outOfRange ? " (Fora de faixa)" : "";
+          const resistanceClass = Number(item.resistance) > Number(state.limits.resistance) ? "bad" : "";
+          const continuityClass = Number(item.continuity) > Number(state.limits.continuity) ? "bad" : "";
+          const photoHtml = photo
+            ? `<img class="thumb" src="${photo}" alt="Foto da inspeção" onclick="window.open('${photo}', '_blank')">`
+            : "—";
 
           return `
             <tr>
-              <td><strong>${point.code || "Ponto Excluído"}</strong></td>
-              <td>${new Date(item.date).toLocaleDateString("pt-BR", { timeZone: "UTC" })}</td>
-              <td>${user.name || "N/A"}</td>
-              <td>${displayAccented(item.visual)}</td>
-              <td class="${Number(item.resistance) > Number(state.limits.resistance) ? 'bad' : ''}">${money(item.resistance)} Ω</td>
-              <td class="${Number(item.continuity) > Number(state.limits.continuity) ? 'bad' : ''}">${money(item.continuity)} mΩ</td>
-              <td><span class="badge ${badgeClass}">${item.conformity}${extraText}</span></td>
-              <td><small>${item.notes || "—"}</small></td>
-              <td style="text-align: center;">
-                ${photo ? `<img class="thumb" src="${photo}" alt="Foto" style="max-height: 40px; border-radius: 4px; cursor: pointer; display: block; margin: 0 auto;" onclick="window.open('${photo}', '_blank')">` : "—"}
-              </td>
+              ${tableCell("Ponto", `<strong>${point.code || "Ponto Excluído"}</strong>`)}
+              ${tableCell("Data", new Date(item.date).toLocaleDateString("pt-BR", { timeZone: "UTC" }))}
+              ${tableCell("Responsável", user.name || "N/A")}
+              ${tableCell("Visual", displayAccented(item.visual))}
+              ${tableCell("Resistência", `${money(item.resistance)} Ω`, resistanceClass)}
+              ${tableCell("Continuidade", `${money(item.continuity)} mΩ`, continuityClass)}
+              ${tableCell("Situação", `<span class="badge ${badgeClass}">${item.conformity}${extraText}</span>`)}
+              ${tableCell("Observações", `<small>${item.notes || "—"}</small>`)}
+              ${tableCell("Foto", photoHtml, "cell-photo")}
             </tr>
           `;
         }).join("")}
@@ -493,10 +565,16 @@ function renderDashboard() {
   });
 
   renderTrend();
-  byId("alerts").innerHTML = state.points.map(point => ({ point, inspection: latestInspection(point.id) }))
-    .filter(row => row.inspection && (row.inspection.conformity !== "Conforme" || isOutOfRange(row.inspection)))
-    .map(row => `<article class="item"><strong>${row.point.code}</strong><p>${statusText(row.inspection.conformity)} - ${money(row.inspection.resistance)} Ohm / ${money(row.inspection.continuity)} mOhm</p><p>${row.inspection.notes}</p></article>`)
-    .join("") || `<p class="muted">Nenhum alerta crítico na última inspeção.</p>`;
+  const alertRows = state.points.map(point => ({ point, inspection: latestInspection(point.id) }))
+    .filter(row => row.inspection && (row.inspection.conformity !== "Conforme" || isOutOfRange(row.inspection)));
+  byId("alerts").innerHTML = alertRows.length
+    ? alertRows.map(row => `<article class="item"><strong>${row.point.code}</strong><p>${statusText(row.inspection.conformity)} - ${money(row.inspection.resistance)} Ohm / ${money(row.inspection.continuity)} mOhm</p><p>${row.inspection.notes}</p></article>`).join("")
+    : emptyState({
+      icon: "check",
+      variant: "success",
+      title: "Nenhum alerta crítico",
+      message: "Todos os pontos inspecionados estão conformes ou dentro da faixa configurada."
+    });
   byId("trendHint").textContent = `Maior resistência atual: ${money(maxResistance)} Ohm`;
 }
 
@@ -543,7 +621,15 @@ function renderNonConformities() {
   ].map(([label, value]) => `<div class="card"><span>${label}</span><strong>${value}</strong></div>`).join("");
 
   if (!filtered.length) {
-    byId("ncList").innerHTML = `<p class="muted" style="padding: 20px; text-align: center;">Nenhuma não conformidade ativa encontrada.</p>`;
+    const hasFilters = search || areaFilter || typeFilter;
+    byId("ncList").innerHTML = emptyState({
+      icon: hasFilters ? "search" : "check",
+      variant: hasFilters ? "" : "success",
+      title: hasFilters ? "Nenhuma pendência encontrada" : "Nenhuma não conformidade ativa",
+      message: hasFilters
+        ? "Não há registros que correspondam aos filtros aplicados."
+        : "Todos os pontos inspecionados estão conformes ou sem pendências críticas no momento."
+    });
     return;
   }
 
@@ -560,7 +646,7 @@ function renderNonConformities() {
           <th>Continuidade</th>
           <th>Situação / Tipo de Anomalia</th>
           <th>Observações</th>
-          <th style="width: 180px; text-align: center;">Ações</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -577,27 +663,26 @@ function renderNonConformities() {
           if (inspection.correction === "Sim") alertBadges.push(`<span class="badge warn">Requer Correção</span>`);
           if (inspection.oxidation === "Sim") alertBadges.push(`<span class="badge warn">Oxidação</span>`);
 
-          return `
-            <tr>
-              <td><strong>${point.code}</strong></td>
-              <td>${new Date(inspection.date).toLocaleDateString("pt-BR", { timeZone: "UTC" })}</td>
-              <td>${area.name}</td>
-              <td>${type.name}</td>
-              <td>${user.name || "N/D"}</td>
-              <td class="${Number(inspection.resistance) > Number(state.limits.resistance) ? 'bad' : ''}">${money(inspection.resistance)} Ω</td>
-              <td class="${Number(inspection.continuity) > Number(state.limits.continuity) ? 'bad' : ''}">${money(inspection.continuity)} mΩ</td>
-              <td>
-                <div style="display: flex; gap: 4px; flex-direction: column;">
-                  ${alertBadges.join("")}
-                </div>
-              </td>
-              <td><small>${inspection.notes || "—"}</small></td>
-              <td style="text-align: center;">
-                <div class="actions-cell" style="justify-content: center;">
+          const resistanceClass = Number(inspection.resistance) > Number(state.limits.resistance) ? "bad" : "";
+          const continuityClass = Number(inspection.continuity) > Number(state.limits.continuity) ? "bad" : "";
+          const badgesHtml = `<div class="status-stack">${alertBadges.join("")}</div>`;
+          const actionsHtml = `<div class="actions-cell">
                   <button data-sheet-point="${point.id}">Ficha</button>
                   ${point.lat && point.lng ? `<a class="button-link" target="_blank" rel="noopener" href="${mapUrl(point)}">Mapa</a>` : ""}
-                </div>
-              </td>
+                </div>`;
+
+          return `
+            <tr>
+              ${tableCell("Ponto", `<strong>${point.code}</strong>`)}
+              ${tableCell("Data da falha", new Date(inspection.date).toLocaleDateString("pt-BR", { timeZone: "UTC" }))}
+              ${tableCell("Área", area.name)}
+              ${tableCell("Tipo", type.name)}
+              ${tableCell("Responsável", user.name || "N/D")}
+              ${tableCell("Resistência", `${money(inspection.resistance)} Ω`, resistanceClass)}
+              ${tableCell("Continuidade", `${money(inspection.continuity)} mΩ`, continuityClass)}
+              ${tableCell("Situação / Tipo de Anomalia", badgesHtml)}
+              ${tableCell("Observações", `<small>${inspection.notes || "—"}</small>`)}
+              ${tableCell("Ações", actionsHtml, "cell-actions")}
             </tr>
           `;
         }).join("")}
@@ -640,16 +725,16 @@ function canvasBase(id) {
 }
 
 const chartPalette = {
-  surface: "#0b1020",
-  grid: "rgba(255, 255, 255, 0.09)",
-  ink: "#f5f7ff",
-  muted: "#9aa6c2",
-  brand: "#8b5cf6",
-  brandDark: "#2563eb",
-  accent: "#f97316",
-  ok: "#22c55e",
-  warn: "#f59e0b",
-  bad: "#fb7185"
+  surface: "#ffffff",
+  grid: "rgba(109, 40, 217, 0.1)",
+  ink: "#1a1625",
+  muted: "#6b6280",
+  brand: "#7c3aed",
+  brandDark: "#6d28d9",
+  accent: "#9333ea",
+  ok: "#16a34a",
+  warn: "#d97706",
+  bad: "#dc2626"
 };
 
 function drawHorizontalBars(id, items, { emptyLabel = "Sem dados para exibir." } = {}) {
@@ -682,7 +767,7 @@ function drawHorizontalBars(id, items, { emptyLabel = "Sem dados para exibir." }
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = chartPalette.muted;
-    ctx.font = "11px 'Segoe UI', sans-serif";
+    ctx.font = `11px ${CHART_FONT}`;
     ctx.textAlign = "center";
     ctx.fillText(`${Math.round((max / axisSteps) * step)}`, x, h - 8);
     ctx.setLineDash([4, 8]);
@@ -698,7 +783,7 @@ function drawHorizontalBars(id, items, { emptyLabel = "Sem dados para exibir." }
     const radius = Math.min(barH / 2, 12);
     const barX = margin.left;
 
-    ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+    ctx.fillStyle = "rgba(109, 40, 217, 0.08)";
     roundedRect(ctx, barX, y, innerW, barH, radius);
     ctx.fill();
 
@@ -710,7 +795,7 @@ function drawHorizontalBars(id, items, { emptyLabel = "Sem dados para exibir." }
     ctx.fill();
 
     ctx.fillStyle = chartPalette.ink;
-    ctx.font = "700 12px 'Segoe UI', sans-serif";
+    ctx.font = `700 12px ${CHART_FONT}`;
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
     ctx.fillText(label, margin.left - 14, y + barH / 2);
@@ -759,8 +844,8 @@ function drawDonut(id, items, { centerLabel = "", centerValue = "", centerCaptio
 
   ctx.save();
   const innerGlow = ctx.createRadialGradient(cx, cy, 8, cx, cy, radius - thickness / 2);
-  innerGlow.addColorStop(0, "rgba(15, 23, 42, 0.95)");
-  innerGlow.addColorStop(1, "rgba(8, 11, 22, 0.98)");
+  innerGlow.addColorStop(0, "#ffffff");
+  innerGlow.addColorStop(1, "#f8f6ff");
   ctx.fillStyle = innerGlow;
   ctx.beginPath();
   ctx.arc(cx, cy, radius - thickness / 2 - 2, 0, Math.PI * 2);
@@ -769,13 +854,13 @@ function drawDonut(id, items, { centerLabel = "", centerValue = "", centerCaptio
   ctx.fillStyle = chartPalette.ink;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "800 26px 'Segoe UI', sans-serif";
+  ctx.font = `800 26px ${CHART_FONT}`;
   ctx.fillText(String(centerValue), cx, cy - 12);
-  ctx.font = "700 12px 'Segoe UI', sans-serif";
+  ctx.font = `700 12px ${CHART_FONT}`;
   ctx.fillStyle = chartPalette.muted;
   ctx.fillText(centerLabel, cx, cy + 10);
   if (centerCaption) {
-    ctx.font = "600 11px 'Segoe UI', sans-serif";
+    ctx.font = `600 11px ${CHART_FONT}`;
     ctx.fillText(centerCaption, cx, cy + 28);
   }
   ctx.restore();
@@ -789,14 +874,14 @@ function drawDonut(id, items, { centerLabel = "", centerValue = "", centerCaptio
     const y = legendY + index * rowH;
     const pct = `${Math.round((item.value / total) * 100)}%`;
     const color = item.color || donutPalette(index);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+    ctx.fillStyle = "rgba(109, 40, 217, 0.08)";
     roundedRect(ctx, legendX, y - 10, legendWidth, 18, 9);
     ctx.fill();
     ctx.fillStyle = color;
     roundedRect(ctx, legendX, y - 10, Math.max(24, (legendWidth * item.value) / total), 18, 9);
     ctx.fill();
     ctx.fillStyle = chartPalette.ink;
-    ctx.font = "700 12px 'Segoe UI', sans-serif";
+    ctx.font = `700 12px ${CHART_FONT}`;
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
     ctx.fillText(item.label, legendX + 10, y + 2);
@@ -836,7 +921,7 @@ function drawTrendLine(id, labels, values, { referenceValue = null, emptyLabel =
   ctx.save();
   ctx.strokeStyle = chartPalette.grid;
   ctx.fillStyle = chartPalette.muted;
-  ctx.font = "11px 'Segoe UI', sans-serif";
+  ctx.font = `11px ${CHART_FONT}`;
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
   const steps = 4;
@@ -862,7 +947,7 @@ function drawTrendLine(id, labels, values, { referenceValue = null, emptyLabel =
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = chartPalette.accent;
-    ctx.font = "700 11px 'Segoe UI', sans-serif";
+    ctx.font = `700 11px ${CHART_FONT}`;
     ctx.textAlign = "left";
     ctx.textBaseline = "bottom";
     ctx.fillText(`Limite ${money(referenceValue)} Ω`, margin.left + 6, limitY - 4);
@@ -873,8 +958,8 @@ function drawTrendLine(id, labels, values, { referenceValue = null, emptyLabel =
   lineGradient.addColorStop(0, chartPalette.brandDark);
   lineGradient.addColorStop(1, chartPalette.brand);
   const fillGradient = ctx.createLinearGradient(0, margin.top, 0, h - margin.bottom);
-  fillGradient.addColorStop(0, "rgba(139, 92, 246, 0.26)");
-  fillGradient.addColorStop(1, "rgba(37, 99, 235, 0.03)");
+  fillGradient.addColorStop(0, "rgba(124, 58, 237, 0.22)");
+  fillGradient.addColorStop(1, "rgba(109, 40, 217, 0.02)");
 
   const areaStartY = margin.top + innerH;
   ctx.save();
@@ -915,13 +1000,13 @@ function drawTrendLine(id, labels, values, { referenceValue = null, emptyLabel =
     ctx.stroke();
     if (points.length <= 8 || index % step === 0 || index === points.length - 1) {
       ctx.fillStyle = chartPalette.muted;
-      ctx.font = "600 11px 'Segoe UI', sans-serif";
+      ctx.font = `600 11px ${CHART_FONT}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       ctx.fillText(point.label, point.x, h - 30);
     }
     ctx.fillStyle = chartPalette.ink;
-    ctx.font = "700 11px 'Segoe UI', sans-serif";
+    ctx.font = `700 11px ${CHART_FONT}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
     ctx.fillText(money(point.value), point.x, point.y - 10);
@@ -931,19 +1016,19 @@ function drawTrendLine(id, labels, values, { referenceValue = null, emptyLabel =
 
 function paintChartBackground(ctx, w, h) {
   const background = ctx.createLinearGradient(0, 0, 0, h);
-  background.addColorStop(0, "#0d1326");
-  background.addColorStop(1, "#070b17");
+  background.addColorStop(0, "#ffffff");
+  background.addColorStop(1, "#f8f6ff");
   ctx.fillStyle = background;
   ctx.fillRect(0, 0, w, h);
 
   const glow = ctx.createRadialGradient(w * 0.18, h * 0.18, 10, w * 0.18, h * 0.18, Math.max(w, h) * 0.55);
-  glow.addColorStop(0, "rgba(139, 92, 246, 0.10)");
-  glow.addColorStop(1, "rgba(139, 92, 246, 0)");
+  glow.addColorStop(0, "rgba(124, 58, 237, 0.08)");
+  glow.addColorStop(1, "rgba(124, 58, 237, 0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, w, h);
 
   ctx.save();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.strokeStyle = "rgba(109, 40, 217, 0.12)";
   ctx.lineWidth = 1;
   roundedRect(ctx, 0.5, 0.5, w - 1, h - 1, 18);
   ctx.stroke();
@@ -953,7 +1038,7 @@ function paintChartBackground(ctx, w, h) {
 function drawEmptyState(ctx, w, h, label) {
   ctx.save();
   ctx.fillStyle = chartPalette.muted;
-  ctx.font = "600 13px 'Segoe UI', sans-serif";
+  ctx.font = `600 13px ${CHART_FONT}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(label, w / 2, h / 2);
@@ -1104,14 +1189,16 @@ function doLogin(event) {
   const userId = byId("loginUser").value;
   const password = byId("loginPassword").value;
   const user = findIn("users", userId);
-  if (user.password !== password) { alert("Senha incorreta."); return; }
+  if (user.password !== password) { toast("Senha incorreta. Tente novamente.", "error"); return; }
   storage.setItem(AUTH_KEY, JSON.stringify({ id: user.id, name: user.name }));
   renderAuth();
+  toast(`Bem-vindo, ${user.name}.`, "success");
 }
 
 function doLogout() {
   storage.removeItem(AUTH_KEY);
   renderAuth();
+  toast("Sessão encerrada.", "info");
 }
 
 // ===== Auditoria =====
@@ -1124,7 +1211,11 @@ function addAudit(action, target) {
 function renderAudit() {
   byId("auditList").innerHTML = state.audit.slice(0, 50).map(a =>
     `<div class="mini"><span>${new Date(a.date).toLocaleString("pt-BR")} — <strong>${a.user}</strong>: ${a.action} → ${a.target}</span></div>`
-  ).join("") || `<p class="muted">Nenhuma alteração registrada.</p>`;
+  ).join("") || emptyState({
+    icon: "inbox",
+    title: "Nenhuma alteração registrada",
+    message: "As ações de cadastro, edição e inspeção aparecerão aqui automaticamente."
+  });
 }
 
 // ===== Upload de fotos =====
@@ -1163,7 +1254,10 @@ function generateNcReport() {
 }
 
 function downloadAllQrCodes() {
-  if (state.points.length === 0) return;
+  if (state.points.length === 0) {
+    toast("Cadastre pontos antes de baixar os QR Codes.", "warn");
+    return;
+  }
   const canvas = document.createElement("canvas");
   const cols = 4;
   const cellW = 220, cellH = 260;
@@ -1189,15 +1283,12 @@ function downloadAllQrCodes() {
   link.download = "qrcodes-nebula-spda.png";
   link.href = canvas.toDataURL("image/png");
   link.click();
+  toast("QR Codes baixados em PNG.", "success");
 }
 
 function bindEvents() {
-  document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
-    document.querySelectorAll(".tab,.view").forEach(el => el.classList.remove("active"));
-    tab.classList.add("active");
-    byId(tab.dataset.view).classList.add("active");
-    renderDashboard();
-  }));
+  document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => navigateToView(tab.dataset.view)));
+  document.querySelectorAll(".hero-tag").forEach(btn => btn.addEventListener("click", () => navigateToView(btn.dataset.view)));
   ["pointClient", "pointArea", "pointType", "pointNumber"].forEach(id => byId(id).addEventListener("input", updatePointCode));
   ["pointSearch", "areaFilter", "typeFilter", "inspectionSearch", "inspectionFilterPoint"].forEach(id => byId(id).addEventListener("input", render));
   ["pointStatusFilter", "inspectionFilterStatus", "ncSearch", "ncAreaFilter", "ncTypeFilter"].forEach(id => byId(id).addEventListener("input", render));
@@ -1210,12 +1301,29 @@ function bindEvents() {
   byId("newPoint").addEventListener("click", clearPointForm);
   byId("deletePoint").addEventListener("click", deleteSelectedPoint);
   byId("clearInspection").addEventListener("click", clearInspectionForm);
-  byId("seedReset").addEventListener("click", () => { if (confirm("Restaurar a base exemplo e substituir os dados atuais?")) { state = buildSeed(); render(); } });
-  byId("clearData").addEventListener("click", () => { if (confirm("Apagar todos os dados do navegador?")) { state = { ...buildSeed(), points: [], inspections: [] }; render(); } });
+  byId("seedReset").addEventListener("click", () => {
+    if (confirm("Restaurar a base exemplo e substituir os dados atuais?")) {
+      state = buildSeed();
+      toast("Base exemplo restaurada.", "info");
+      render();
+    }
+  });
+  byId("clearData").addEventListener("click", () => {
+    if (confirm("Apagar todos os dados do navegador?")) {
+      state = { ...buildSeed(), points: [], inspections: [] };
+      toast("Dados apagados.", "warn");
+      render();
+    }
+  });
   byId("printQr").addEventListener("click", () => window.print());
   byId("startScan").addEventListener("click", startScanner);
   byId("stopScan").addEventListener("click", stopScanner);
-  byId("applyQrBase").addEventListener("click", () => { state.qrBase = byId("qrBase").value.trim(); renderQrCodes(); save(); });
+  byId("applyQrBase").addEventListener("click", () => {
+    state.qrBase = byId("qrBase").value.trim();
+    renderQrCodes();
+    save();
+    toast("QR Codes atualizados com a nova URL base.", "success");
+  });
   byId("exportData").addEventListener("click", exportData);
   byId("importData").addEventListener("change", importData);
 
@@ -1235,6 +1343,7 @@ function bindEvents() {
       state.limits.resistance = Number(byId("limitResistance").value || 10);
       state.limits.continuity = Number(byId("limitContinuity").value || 100);
       addAudit("Limites alterados", `Res: ${state.limits.resistance} Ω / Cont: ${state.limits.continuity} mΩ`);
+      toast("Limites de alerta salvos.", "success");
       render();
     });
 
@@ -1251,6 +1360,12 @@ function bindEvents() {
   byId("userForm").addEventListener("submit", event => saveConfig(event, "users", ["userName", "userRole", "userPassword"], item => ({ name: item[0], role: item[1], password: item[2] || "1234" }), "user"));
 
   document.addEventListener("click", event => {
+      if (event.target.id === "emptyNewPoint") {
+        navigateToView("pontos");
+        clearPointForm();
+        byId("pointForm")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
       const editPoint = event.target.dataset.editPoint;
       const sheetPoint = event.target.dataset.sheetPoint;
       if (editPoint) fillPointForm(editPoint);
@@ -1285,12 +1400,13 @@ function savePoint(event) {
     notes: byId("pointNotes").value
   };
   const duplicate = state.points.find(item => item.code === point.code && item.id !== id);
-  if (duplicate) return alert("Já existe um ponto com este código.");
+  if (duplicate) { toast("Já existe um ponto com este código.", "error"); return; }
   upsert(state.points, point);
   addAudit(isNew ? "Ponto criado" : "Ponto editado", point.code);
   selectedPoint = id;
   uploadedPointPhoto = "";
   byId("pointPhotoPreview").innerHTML = "";
+  toast(isNew ? `Ponto ${point.code} cadastrado.` : `Ponto ${point.code} atualizado.`, "success");
   render();
 }
 
@@ -1335,9 +1451,11 @@ function deleteSelectedPoint() {
   const id = byId("pointId").value || selectedPoint;
   if (!id) return;
   if (!confirm("Excluir este ponto e suas inspeções?")) return;
+  const point = findIn("points", id);
   state.points = state.points.filter(item => item.id !== id);
   state.inspections = state.inspections.filter(item => item.pointId !== id);
   clearPointForm();
+  toast(`Ponto ${point.code || ""} excluído.`.trim(), "warn");
   render();
 }
 
@@ -1366,6 +1484,7 @@ function saveInspection(event) {
   addAudit(isNew ? "Inspeção registrada" : "Inspeção alterada", point.code || pointId);
   uploadedInspectionPhoto = "";
   byId("inspectionPhotoPreview").innerHTML = "";
+  toast(isNew ? "Inspeção registrada com sucesso." : "Inspeção atualizada.", "success");
   clearInspectionForm();
   render();
 }
@@ -1380,9 +1499,12 @@ function saveConfig(event, collection, ids, mapper, prefix) {
   event.preventDefault();
   const values = ids.map(id => byId(id).value.trim());
   const id = byId(`${prefix}Id`).value || uid();
+  const isNew = !state[collection].find(item => item.id === id);
   upsert(state[collection], { id, ...mapper(values) });
   event.target.reset();
   byId(`${prefix}Id`).value = "";
+  const labels = { client: "Cliente", unit: "Unidade", area: "Área", type: "Tipo de ponto", user: "Responsável" };
+  toast(isNew ? `${labels[prefix] || "Registro"} cadastrado.` : `${labels[prefix] || "Registro"} atualizado.`, "success");
   render();
 }
 
@@ -1413,6 +1535,7 @@ function exportData() {
   link.download = "nebula-spda-dados.json";
   link.click();
   setTimeout(() => URL.revokeObjectURL(link.href), 0);
+  toast("Arquivo JSON exportado.", "info");
 }
 
 function importData(event) {
@@ -1422,9 +1545,10 @@ function importData(event) {
   reader.onload = () => {
     try {
       state = migrateState(JSON.parse(reader.result));
+      toast("Dados importados com sucesso.", "success");
       render();
     } catch {
-      alert("Arquivo JSON inválido.");
+      toast("Arquivo JSON inválido.", "error");
     }
   };
   reader.readAsText(file);
@@ -1506,11 +1630,11 @@ function safeOpenWindow(title) {
   try {
     const w = window.open("", "_blank");
     if (!w) {
-      alert("O navegador bloqueou a abertura do relatório.");
+      toast("O navegador bloqueou a abertura do relatório.", "warn");
       return null;
     }
     w.document.open();
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:left;vertical-align:top}th{background:#006b5c;color:#fff}h1{color:#006b5c}</style></head><body>`);
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:sans-serif;padding:20px;color:#1a1625}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}th{background:#6d28d9;color:#fff}h1{color:#6d28d9}</style></head><body>`);
     return w;
   } catch {
     return null;
